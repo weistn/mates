@@ -38,9 +38,11 @@ const (
 //	TokenVar
 )
 
-// Scanner mode defines a state of the scanner.
+// scannerMode defines the state of the scanner.
+type scannerMode int
+
 const (
-	modeNormal = iota
+	modeNormal scannerMode = iota
 	// modeSection means that the scanner saw a tag (TokenSection) and is not expecting either
 	// TokenValue or text.
 	modeSection
@@ -53,15 +55,18 @@ const (
 	modeConfig
 )
 
-// Scanner layout defines how the scanner should handle lines with text.
+// textMode defines how the scanner handles lines with text.
+type textMode int
+
 const (
-	layoutNormal = iota
-	layoutTable
-	layoutCode
-	layoutMath
-	layoutParagraph
+	textNormal textMode = iota
+	textTable
+	textCode
+	textMath
+	textParagraph
 )
 
+// String denoting start and end of the frontmatter.
 var yamlSeparator = []byte("---")
 
 // ScannerError reports a lexicographic error,
@@ -81,24 +86,21 @@ type ScannerRange struct {
 
 // Scanner splits markdown into tokens.
 type Scanner struct {
-	src      []byte // source
-	mode     int
-	nextMode int
-	layout   int
-	//	nextLayout int
+	// source
+
+	src      []byte // Source markdown
+	mode     scannerMode
+	nextMode scannerMode
+	textMode textMode
 
 	// scanning state
+
 	ch         rune // current character
-	offset     int  // character offset
-	rdOffset   int  // reading offset (position after current character)
-	lineOffset int  // current line offset
+	offset     int  // Offset of `ch` in `src` (position of the current character)
+	readOffset int  // reading offset (position after current character)
+	lineOffset int  // start of the current line in `src`.
 	lineCount  int
 	indent     int // The indentation level of the last tag
-
-	//	lastPos   ScannerPos
-	//	lastToken Token
-	//	lastStr   string
-	//	useLast   bool
 
 	// Errors denotes the lexicographical errors detected while scanning.
 	Errors []ScannerError
@@ -116,26 +118,25 @@ func NewScanner(markdown []byte) *Scanner {
 
 // Read the next Unicode char into scanner.ch.
 // scanner.ch < 0 means end-of-file.
-//
 func (scanner *Scanner) next() {
-	if scanner.rdOffset < len(scanner.src) {
-		scanner.offset = scanner.rdOffset
+	if scanner.readOffset < len(scanner.src) {
+		scanner.offset = scanner.readOffset
 		if scanner.ch == '\n' {
 			scanner.lineOffset = scanner.offset
 			scanner.lineCount++
 		}
-		r, w := rune(scanner.src[scanner.rdOffset]), 1
+		r, w := rune(scanner.src[scanner.readOffset]), 1
 		switch {
 		case r == 0:
 			scanner.error(scanner.lineCount, scanner.offset-scanner.lineOffset, scanner.offset, "illegal character NUL")
 		case r >= 0x80:
 			// not ASCII
-			r, w = utf8.DecodeRune(scanner.src[scanner.rdOffset:])
+			r, w = utf8.DecodeRune(scanner.src[scanner.readOffset:])
 			if r == utf8.RuneError && w == 1 {
 				scanner.error(scanner.lineCount, scanner.offset-scanner.lineOffset, scanner.offset, "illegal UTF-8 encoding")
 			}
 		}
-		scanner.rdOffset += w
+		scanner.readOffset += w
 		scanner.ch = r
 	} else {
 		scanner.offset = len(scanner.src)
@@ -151,6 +152,21 @@ func (scanner *Scanner) skipWhitespace(newline bool) {
 	for scanner.ch == ' ' || scanner.ch == '\t' || (newline && scanner.ch == '\n') || scanner.ch == '\r' {
 		scanner.next()
 	}
+}
+
+// isStartOfLine returns true if the current character `scanner.ch`
+// is the first non-space character in the line.
+func (scanner *Scanner) isStartOfLine() bool {
+	if scanner.lineOffset == scanner.offset {
+		return true
+	}
+	for i := scanner.lineCount; i < scanner.offset; i++ {
+		ch := scanner.src[i]
+		if ch != ' ' && ch != '\t' && ch != '\r' {
+			return false
+		}
+	}
+	return true
 }
 
 func (scanner *Scanner) skipUntilEmptyLine() {
@@ -198,24 +214,24 @@ func (scanner *Scanner) Scan() (ScannerRange, Token, string) {
 
 func (scanner *Scanner) scan() (Token, string) {
 	// When in Code-Layout, scan until EOF or a '#' at the beginning of a line
-	if scanner.layout == layoutCode && (scanner.mode == modeNormal || scanner.mode == modeNewTag) {
+	if scanner.textMode == textCode && (scanner.mode == modeNormal || scanner.mode == modeNewTag) {
 		start := scanner.offset
 		scanner.skipUntilEmptyLine()
 		// Scan until a line starts with the same or less indent as the previous tag
 		for ; scanner.ch != -1 && ((scanner.offset-scanner.lineOffset > scanner.indent) || scanner.ch == ' ' || scanner.ch == '\t' || scanner.ch == '\n' || scanner.ch == '\r'); scanner.next() {
 		}
-		scanner.layout = layoutNormal
+		scanner.textMode = textNormal
 		scanner.mode = modeNewTag
 		return TokenCodeText, string(scanner.src[start:scanner.offset])
 	}
 	// When in Math-Layout, scan until EOF or a '#' at the beginning of a line
-	if scanner.layout == layoutMath && scanner.mode == modeNormal {
+	if scanner.textMode == textMath && scanner.mode == modeNormal {
 		start := scanner.offset
 		scanner.skipUntilEmptyLine()
 		// Scan until a line starts with the same or less indent as the previous tag
 		for ; scanner.ch != -1 && ((scanner.offset-scanner.lineOffset > scanner.indent) || scanner.ch == ' ' || scanner.ch == '\t' || scanner.ch == '\n' || scanner.ch == '\r'); scanner.next() {
 		}
-		scanner.layout = layoutNormal
+		scanner.textMode = textNormal
 		scanner.mode = modeNewTag
 		return TokenMathText, string(scanner.src[start:scanner.offset])
 	}
@@ -252,15 +268,13 @@ scanAgain:
 			}
 			goto scanAgain
 		}
-	case '>':
-		fallthrough
-	case '#':
+	case '>', '#':
 		// The '#' and '>' symbols are treated special when it is at the beginning of a line
 		if scanner.lineOffset == scanner.offset || scanner.mode == modeNewTag {
 			scanner.indent = scanner.offset - scanner.lineOffset
 			scanner.mode = modeSection
 			scanner.nextMode = modeNormal
-			scanner.layout = layoutNormal
+			scanner.textMode = textNormal
 			// Consume all following hashes and characters up to a whitespace or ';'
 			start := scanner.offset
 			scanner.next()
@@ -275,9 +289,7 @@ scanAgain:
 			}
 			return TokenSection, name
 		}
-	case '-':
-		fallthrough
-	case '+':
+	case '-', '+':
 		if scanner.lineOffset == scanner.offset || scanner.mode == modeNewTag {
 			indent := scanner.offset - scanner.lineOffset
 			start := scanner.offset
@@ -305,7 +317,7 @@ scanAgain:
 				scanner.mode = modeSection
 				scanner.nextMode = modeNormal
 			}
-			scanner.layout = layoutNormal
+			scanner.textMode = textNormal
 			scanner.indent = indent
 			return TokenEnum, str
 		}
@@ -320,8 +332,11 @@ scanAgain:
 			return TokenStyle, "*"
 		}
 	case '|':
-		if scanner.mode == modeNormal && scanner.layout == layoutTable {
+		// Table mode or start of a new table?
+		if scanner.mode == modeNormal && (scanner.textMode == textTable || scanner.isStartOfLine()) {
+			scanner.textMode = textTable
 			start := scanner.offset
+			// Skip all following `|` characters (required for multi-column cells)
 			for scanner.next(); scanner.ch == '|'; scanner.next() {
 			}
 			end := scanner.offset
@@ -332,13 +347,9 @@ scanAgain:
 				scanner.skipWhitespace(false)
 				// An empty line terminates the table
 				if scanner.ch == '\n' {
-					scanner.layout = layoutNormal
+					scanner.textMode = textNormal
 					scanner.skipWhitespace(true)
 					scanner.mode = modeNewTag
-					// If the new paragraph starts with a normal letter, then inject a TokenSection
-					// if scanner.ch != -1 && scanner.ch != '#' && scanner.ch != '*' && scanner.ch != '-' {
-					//scanner.mode = modeInjectSection
-					//}
 				}
 				return TokenTableRow, string(scanner.src[start:end])
 			}
@@ -497,8 +508,8 @@ scanAgain:
 		colon := false
 		for scanner.ch != -1 && scanner.ch != '{' && scanner.ch != '}' && scanner.ch != '~' && scanner.ch != '`' && scanner.ch != '$' && scanner.ch != '_' && scanner.ch != '*' &&
 			(!newline || (scanner.ch != '#' && scanner.ch != '+' && scanner.ch != '-' && scanner.ch != '%' && scanner.ch != '>')) &&
-			(scanner.layout != layoutTable || scanner.ch != '|') &&
-			(scanner.layout != layoutParagraph || scanner.ch != '\n' || !colon) {
+			(scanner.textMode != textTable || scanner.ch != '|') &&
+			(scanner.textMode != textParagraph || scanner.ch != '\n' || !colon) {
 			// Break upon an empty line
 			if newline && scanner.ch == '\n' {
 				scanner.next()
@@ -530,10 +541,10 @@ scanAgain:
 		// Then force the scanner to recognize a new tag when going futher.
 		if newline && (scanner.ch == '#' || scanner.ch == '+' || scanner.ch == '-' || scanner.ch == '%' || scanner.ch == '>') {
 			scanner.mode = modeNewTag
-		} else if colon && scanner.layout == layoutParagraph && scanner.ch == '\n' {
+		} else if colon && scanner.textMode == textParagraph && scanner.ch == '\n' {
 			scanner.skipWhitespace(true)
 			scanner.mode = modeNewTag
-			scanner.layout = layoutNormal
+			scanner.textMode = textNormal
 			result = strings.TrimRight(result, " \r\t\n")
 		}
 		return TokenText, result

@@ -493,7 +493,7 @@ func (parser *Parser) parse() (doc *DocumentNode, err error) {
 				parentHood := NoParentHood
 				// Do not parse CSS styles. Instead expect YAML config text
 				parser.s.mode = modeConfig
-				parser.s.layout = layoutCode
+				parser.s.textMode = textCode
 				parser.s.skipWhitespace(false)
 				parser.next()
 				config, err := parseConfig()
@@ -655,7 +655,7 @@ func (parser *Parser) parse() (doc *DocumentNode, err error) {
 				entity := parser.tokenStr[9:]
 				// Do not parse CSS styles. Instead expect YAML config text
 				parser.s.mode = modeConfig
-				parser.s.layout = layoutCode
+				parser.s.textMode = textCode
 				parser.s.skipWhitespace(false)
 				parser.next()
 				config, err := parseConfig()
@@ -738,7 +738,7 @@ func (parser *Parser) parse() (doc *DocumentNode, err error) {
 				style := parser.tokenStr[9:]
 				// Do not parse CSS styles. Instead expect YAML config text
 				parser.s.mode = modeConfig
-				parser.s.layout = layoutCode
+				parser.s.textMode = textCode
 				parser.s.skipWhitespace(false)
 				parser.next()
 				config, err := parseConfig()
@@ -830,13 +830,13 @@ func (parser *Parser) parse() (doc *DocumentNode, err error) {
 					tag = parser.grammar.GetTag("#p")
 				}
 				if tag.SectionMode == sectionTable {
-					parser.s.layout = layoutTable
+					parser.s.textMode = textTable
 				} else if tag.SectionMode == sectionCode {
-					parser.s.layout = layoutCode
+					parser.s.textMode = textCode
 				} else if tag.SectionMode == sectionMath {
-					parser.s.layout = layoutMath
+					parser.s.textMode = textMath
 				} else if tag.SectionMode == sectionParagraph {
-					parser.s.layout = layoutParagraph
+					parser.s.textMode = textParagraph
 				}
 				node := openTag(tag)
 				if pos != -1 {
