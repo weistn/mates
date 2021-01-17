@@ -96,12 +96,9 @@ func (gen *HTMLGenerator) Prepare() error {
 	fmap["prefix"] = funcPrefix
 	fmap["hasPrefix"] = funcHasPrefix
 	fmap["initial"] = funcInitial
-	fmap["map"] = funcMap
-	fmap["field"] = funcField
 	fmap["uniq"] = funcUniq
 	fmap["sort"] = funcSort
 	fmap["sortBy"] = funcSortBy
-	fmap["filter"] = funcFilter
 	fmap["hex"] = funcHex
 	fmap["hash"] = funcHash
 	fmap["resource"] = func(urlString string) (string, error) {

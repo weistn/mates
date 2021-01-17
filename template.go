@@ -445,154 +445,22 @@ func (ctx *NodeContext) ForceID() string {
 	return ctx.node.ForceID()
 }
 
-/*
-func funcNoteq(a, b interface{}) bool {
-	return !funcEq(a, b)
-}
-
-func funcEq(a, b interface{}) bool {
-	switch a.(type) {
-	case string:
-		a2 := a.(string)
-		if b2, ok := b.(string); ok {
-			return a2 == b2
-		}
-		return false
-	case *TemplatContext:
-		a2 := a.(*FileContext)
-		if b2, ok := b.(*FileContext); ok {
-			return a2 == b2
-		}
-		return false
-	case *DocumentNode:
-		a2 := a.(*DocumentNode)
-		if b2, ok := b.(*DocumentNode); ok {
-			return a2 == b2
-		}
-		return false
-	}
-	return false
-}
-*/
-
-/*
-func funcFirst(lst []*DocumentNode) *DocumentNode {
-	if len(lst) > 0 {
-		return lst[0]
-	}
-	return nil
-}
-*/
-
-func funcMap(f interface{}, values []interface{}) ([]interface{}, error) {
-	vf := reflect.ValueOf(f)
-	result := make([]interface{}, 0, len(values))
-	vargs := make([]reflect.Value, 1)
-	for _, arg := range values {
-		vargs[0] = reflect.ValueOf(arg)
-		for _, r := range vf.Call(vargs) {
-			result = append(result, r.Interface())
-		}
-	}
-	return result, nil
-}
-
-func funcField(args ...interface{}) interface{} {
-	if len(args) < 2 {
-		return curry(funcField, args)
-	}
-	if len(args) > 2 {
-		panic("Field expects only two arguments")
-	}
-	field, ok := args[0].(string)
-	if !ok {
-		panic("Field expects a string as first argument")
-	}
-	vv := reflect.ValueOf(args[1])
-	if vv.Kind() == reflect.Ptr {
-		vvv := vv.Elem()
-		result := vvv.FieldByName(field)
-		if result.IsValid() {
-			return result
-		}
-	} else {
-		result := vv.FieldByName(field)
-		if result.IsValid() {
-			return result
-		}
-	}
-	method := vv.MethodByName(field)
-	if !method.IsValid() {
-		panic("Unknown method or field " + field)
-	}
-	return method.Call(nil)[0].Interface()
-}
-
-func funcHex(args ...interface{}) interface{} {
-	if len(args) < 1 {
-		return curry(funcHex, args)
-	}
-	if len(args) > 1 {
-		panic("hex expects only one argument")
-	}
-	a, ok := args[0].([]byte)
-	if !ok {
-		panic("hex expects a byte array as first argument")
-	}
+func funcHex(a []byte) string {
 	return hex.EncodeToString([]byte(a))
 }
 
-func funcHash(args ...interface{}) interface{} {
-	if len(args) < 1 {
-		return curry(funcHash, args)
-	}
-	if len(args) > 1 {
-		panic("hash expects only one argument")
-	}
-	a, ok := args[0].(string)
-	if !ok {
-		panic("hex expects a string as first argument")
-	}
+func funcHash(a string) string {
 	h := sha256.New()
 	h.Write([]byte(a))
 	b := hex.EncodeToString(h.Sum(nil))
 	return b
 }
 
-func funcHasPrefix(args ...interface{}) interface{} {
-	if len(args) < 2 {
-		return curry(funcHasPrefix, args)
-	}
-	if len(args) > 2 {
-		panic("hasPrefix expects only two arguments")
-	}
-	prefix, ok := args[0].(string)
-	if !ok {
-		panic("hasPrefix expects a string as first argument")
-	}
-	str, ok := args[1].(string)
-	if !ok {
-		panic("hasPrefix expects a string as second argument")
-	}
+func funcHasPrefix(prefix string, str string) bool {
 	return strings.HasPrefix(str, prefix)
 }
 
-func funcPrefix(args ...interface{}) interface{} {
-	if len(args) < 2 {
-		return curry(funcPrefix, args)
-	}
-	if len(args) > 2 {
-		panic("prefix expects only two arguments")
-	}
-	length, ok := args[0].(int)
-	if !ok {
-		panic("prefix expects an integer as first argument")
-	}
-	str, ok := args[1].(string)
-	if !ok {
-		panic("prefix expects a string as second argument")
-	}
-
+func funcPrefix(length int, str string) string {
 	if len(str) < length {
 		return str
 	}
@@ -614,16 +482,14 @@ func funcInitial(str string) string {
 	return ""
 }
 
-func funcSort(list interface{}) []string {
-	k := reflect.Indirect(reflect.ValueOf(list)).Kind()
-	switch k {
-	case reflect.Slice, reflect.Array:
-		a := strslice(list)
-		s := sort.StringSlice(a)
-		s.Sort()
-		return s
+func funcSort(list reflect.Value) ([]string, error) {
+	a, err := strslice(list)
+	if err != nil {
+		return nil, err
 	}
-	return []string{strval(list)}
+	s := sort.StringSlice(a)
+	s.Sort()
+	return s, nil
 }
 
 type sortHelper struct {
@@ -648,135 +514,93 @@ func (h *sortHelper) Swap(i, j int) {
 	h.keys[j] = tmpKey
 }
 
-func funcSortBy(args ...interface{}) interface{} {
-	if len(args) < 2 {
-		return curry(funcSortBy, args)
-	}
-	if len(args) > 2 {
-		panic("sortBy expects only two arguments")
-	}
-	field, ok := args[0].(string)
-	if !ok {
-		panic("sortBy expects a string as first argument")
-	}
-	list := args[1]
+func funcSortBy(field string, list reflect.Value) ([]interface{}, error) {
 	var h sortHelper
-	switch v := list.(type) {
-	case []interface{}:
-		h.list = v
-	default:
-		val := reflect.ValueOf(list)
-		switch val.Kind() {
-		case reflect.Array, reflect.Slice:
-			l := val.Len()
-			h.list = make([]interface{}, 0, l)
-			for i := 0; i < l; i++ {
-				value := val.Index(i).Interface()
-				if value != nil {
-					h.list = append(h.list, value)
-				}
-			}
-		case reflect.Map:
-			l := val.Len()
-			h.list = make([]interface{}, 0, l)
-			for _, key := range val.MapKeys() {
-				value := val.MapIndex(key).Interface()
-				if value != nil {
-					h.list = append(h.list, value)
-				}
-			}
-
-		default:
-			panic("sortBy: Unsuportted data type")
+	switch list.Kind() {
+	case reflect.Array, reflect.Slice:
+		l := list.Len()
+		h.list = make([]interface{}, 0, l)
+		for i := 0; i < l; i++ {
+			value := list.Index(i).Interface()
+			h.list = append(h.list, value)
 		}
+	case reflect.Map:
+		l := list.Len()
+		h.list = make([]interface{}, 0, l)
+		for _, key := range list.MapKeys() {
+			value := list.MapIndex(key).Interface()
+			h.list = append(h.list, value)
+		}
+
+	default:
+		return nil, fmt.Errorf("sortBy: Unsupported data type")
 	}
 
 	h.keys = make([]string, len(h.list))
-	for i, v := range h.list {
-		vv := reflect.ValueOf(v)
-		if vv.Kind() == reflect.Ptr {
-			vvv := vv.Elem()
+	for i, value := range h.list {
+		v := reflect.ValueOf(value)
+		// Try to extract a field of the given name
+		if v.Kind() == reflect.Ptr {
+			vvv := v.Elem()
 			result := vvv.FieldByName(field)
 			if result.IsValid() && result.Kind() == reflect.String {
 				h.keys[i] = result.String()
 				continue
 			}
 		} else {
-			result := vv.FieldByName(field)
+			result := v.FieldByName(field)
 			if result.IsValid() && result.Kind() == reflect.String {
 				h.keys[i] = result.String()
 				continue
 			}
 		}
-		method := vv.MethodByName(field)
+		// Try to call a method of the given name
+		method := v.MethodByName(field)
 		if !method.IsValid() {
-			panic("Unknown method or field " + field)
+			return nil, fmt.Errorf("Field %v is neither a string, nor a method", field)
+		}
+		if method.Type().NumIn() != 0 {
+			return nil, fmt.Errorf("Method %v expects additional arguments", field)
 		}
 		result := method.Call(nil)[0]
 		if result.IsValid() && result.Kind() == reflect.String {
 			h.keys[i] = result.String()
 			continue
 		}
-		panic("Field " + field + " is not a string")
 	}
 
 	sort.Sort(&h)
-	return h.list
+	return h.list, nil
 }
 
-func funcUniq(list interface{}) ([]interface{}, error) {
-	tp := reflect.TypeOf(list).Kind()
-	switch tp {
+func funcUniq(list reflect.Value) ([]interface{}, error) {
+	switch list.Kind() {
 	case reflect.Slice, reflect.Array:
-		l2 := reflect.ValueOf(list)
-		l := l2.Len()
+		l := list.Len()
 		dest := []interface{}{}
-		var item interface{}
 		for i := 0; i < l; i++ {
-			item = l2.Index(i).Interface()
+			item := list.Index(i).Interface()
 			if !inList(dest, item) {
 				dest = append(dest, item)
 			}
 		}
 		return dest, nil
 	default:
-		return nil, fmt.Errorf("Expected a list instead of type %s", tp)
+		return nil, fmt.Errorf("Expected a list instead of type %s", list.Type())
 	}
 }
 
-func strslice(v interface{}) []string {
-	switch v := v.(type) {
-	case []string:
-		return v
-	case []interface{}:
-		b := make([]string, 0, len(v))
-		for _, s := range v {
-			if s != nil {
-				b = append(b, strval(s))
-			}
+func strslice(list reflect.Value) ([]string, error) {
+	switch list.Kind() {
+	case reflect.Array, reflect.Slice:
+		l := list.Len()
+		b := make([]string, l)
+		for i := 0; i < l; i++ {
+			b[i] = strval(list.Index(i))
 		}
-		return b
-	default:
-		val := reflect.ValueOf(v)
-		switch val.Kind() {
-		case reflect.Array, reflect.Slice:
-			l := val.Len()
-			b := make([]string, 0, l)
-			for i := 0; i < l; i++ {
-				value := val.Index(i).Interface()
-				if value != nil {
-					b = append(b, strval(value))
-				}
-			}
-			return b
-		default:
-			if v == nil {
-				return []string{}
-			}
-
-			return []string{strval(v)}
-		}
+		return b, nil
 	}
+	return nil, fmt.Errorf("Expected an array or slice")
 }
 
 func inList(list []interface{}, element interface{}) bool {
@@ -788,7 +612,12 @@ func inList(list []interface{}, element interface{}) bool {
 	return false
 }
 
-func strval(v interface{}) string {
+func strval(value reflect.Value) string {
+	var v interface{}
+	v = value.Interface()
+	if v == nil {
+		return "nil"
+	}
 	switch v := v.(type) {
 	case string:
 		return v
@@ -802,56 +631,6 @@ func strval(v interface{}) string {
 		return fmt.Sprintf("%v", v)
 	}
 }
-
-func curry(f interface{}, values []interface{}) interface{} {
-	return func(additional ...interface{}) interface{} {
-		vf := reflect.ValueOf(f)
-		args := make([]reflect.Value, 0, len(values)+len(additional))
-		for _, v := range values {
-			args = append(args, reflect.ValueOf(v))
-		}
-		for _, v := range additional {
-			args = append(args, reflect.ValueOf(v))
-		}
-		return vf.Call(args)[0].Interface()
-	}
-}
-
-func funcFilter(lst []*DocumentNode, classes ...string) []*DocumentNode {
-	result := []*DocumentNode{}
-	for _, DocumentNode := range lst {
-		match := true
-		for _, class := range classes {
-			if !DocumentNode.HasClass(class) {
-				match = false
-				break
-			}
-		}
-		if match {
-			result = append(result, DocumentNode)
-		}
-	}
-	return result
-}
-
-/*
-func funcFilternot(lst []*DocumentNode, classes ...string) []*DocumentNode {
-	result := []*DocumentNode{}
-	for _, DocumentNode := range lst {
-		match := true
-		for _, class := range classes {
-			if DocumentNode.HasClass(class) {
-				match = false
-				break
-			}
-		}
-		if match {
-			result = append(result, DocumentNode)
-		}
-	}
-	return result
-}
-*/
 
 func wrapNodes(gen *HTMLGenerator, nodes []*DocumentNode) []*NodeContext {
 	var result = make([]*NodeContext, 0, len(nodes))
