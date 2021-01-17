@@ -7,8 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"vs.uni-due.de/weis/mates"
-
 	"github.com/spf13/afero"
 )
 
@@ -23,7 +21,7 @@ type Builder struct {
 	contentFs   afero.Fs
 	// The site to build
 	site       *site
-	generators map[string]*mates.HTMLGenerator
+	generators map[string]*HTMLGenerator
 	options    *options
 	// A cache of folderContext objects
 	folderContext map[string]*FolderContext
@@ -42,7 +40,7 @@ func newBuilder(options *options) (*Builder, error) {
 	// Create the builder
 	pageTypes := make(map[string]*pageType)
 	folderContext := make(map[string]*FolderContext)
-	b := &Builder{generators: make(map[string]*mates.HTMLGenerator), options: options, pageTypes: pageTypes, folderContext: folderContext, copied: make(map[string]bool)}
+	b := &Builder{generators: make(map[string]*HTMLGenerator), options: options, pageTypes: pageTypes, folderContext: folderContext, copied: make(map[string]bool)}
 
 	// The file system to use for the build.
 	// Input and output files are located here.
@@ -298,17 +296,17 @@ func (b *Builder) parse() error {
 
 // Parses the markdown file located at `path` and creates a generator that can produce output for the file.
 func (b *Builder) parseFile(path string, kind pageTypeKind, folderContext *FolderContext) error {
-	g := mates.NewGrammar()
+	g := NewGrammar()
 	var markdown []byte
 	var pt *pageType
-	var res []*mates.Resource
-	var parser *mates.Parser
-	var doc *mates.DocumentNode
+	var res []*Resource
+	var parser *Parser
+	var doc *DocumentNode
 	var err error
 	var frontmatter map[string]interface{}
 	tags := make(map[string][]string)
 
-	contentResolver := func(res *mates.Resource) error {
+	contentResolver := func(res *Resource) error {
 		return resolveContentResource(b, res)
 	}
 
@@ -326,7 +324,7 @@ func (b *Builder) parseFile(path string, kind pageTypeKind, folderContext *Folde
 		}
 	}
 	// Create a parser for the page
-	parser = mates.NewParser(g, markdown, contentResolver)
+	parser = NewParser(g, markdown, contentResolver)
 
 	// Parse and process frontmatter
 	frontmatter, err = parser.ParseFrontmatter()
@@ -348,11 +346,11 @@ func (b *Builder) parseFile(path string, kind pageTypeKind, folderContext *Folde
 						if err != nil {
 							return fmt.Errorf("In %v %v: URL is malformed: %v", path, k, err)
 						}
-						var r *mates.Resource
+						var r *Resource
 						if k == "Scripts" {
-							r = &mates.Resource{Type: mates.ResourceTypeScript, URL: u}
+							r = &Resource{Type: ResourceTypeScript, URL: u}
 						} else {
-							r = &mates.Resource{Type: mates.ResourceTypeStyle, URL: u}
+							r = &Resource{Type: ResourceTypeStyle, URL: u}
 						}
 						err = contentResolver(r)
 						if err != nil {
@@ -368,11 +366,11 @@ func (b *Builder) parseFile(path string, kind pageTypeKind, folderContext *Folde
 				if err != nil {
 					return fmt.Errorf("In %v %v: URL is malformed: %v", path, k, err)
 				}
-				var r *mates.Resource
+				var r *Resource
 				if k == "Scripts" {
-					r = &mates.Resource{Type: mates.ResourceTypeScript, URL: u}
+					r = &Resource{Type: ResourceTypeScript, URL: u}
 				} else {
-					r = &mates.Resource{Type: mates.ResourceTypeStyle, URL: u}
+					r = &Resource{Type: ResourceTypeStyle, URL: u}
 				}
 				err = contentResolver(r)
 				if err != nil {
@@ -429,11 +427,11 @@ func (b *Builder) parseFile(path string, kind pageTypeKind, folderContext *Folde
 	for i := 0; i < len(markdownSyntaxData); i++ {
 		markdownSyntax := markdownSyntaxData[i]
 		// markdownSyntaxFile := markdownSyntaxFiles[i]
-		syntaxResolver := func(res *mates.Resource) error {
+		syntaxResolver := func(res *Resource) error {
 			return pt.resolveStaticResource(res, pt)
 		}
 		// println("SYNTAX: ", markdownSyntaxFile)
-		syntaxParser := mates.NewParser(g, markdownSyntax, syntaxResolver)
+		syntaxParser := NewParser(g, markdownSyntax, syntaxResolver)
 		// Parse the frontmatter of the syntax extension. But currently it is ignored
 		_, err = syntaxParser.ParseFrontmatter()
 		if err != nil {
@@ -453,7 +451,7 @@ func (b *Builder) parseFile(path string, kind pageTypeKind, folderContext *Folde
 			return err
 		}
 	} else {
-		doc = mates.NewDocument(g)
+		doc = NewDocument(g)
 	}
 
 	var base string
@@ -467,11 +465,11 @@ func (b *Builder) parseFile(path string, kind pageTypeKind, folderContext *Folde
 			return err
 		}
 		if baseFile != "" {
-			baseResolver := func(res *mates.Resource) error {
+			baseResolver := func(res *Resource) error {
 				return pt.resolveStaticResource(res, pt)
 			}
-			var baseRes []*mates.Resource
-			base, baseRes, err = mates.ParseHTMLResources(base, baseResolver)
+			var baseRes []*Resource
+			base, baseRes, err = ParseHTMLResources(base, baseResolver)
 			if err != nil {
 				return err
 			}
@@ -483,11 +481,11 @@ func (b *Builder) parseFile(path string, kind pageTypeKind, folderContext *Folde
 		}
 		for i := 0; i < len(layoutData); i++ {
 			layoutStr := layoutData[i]
-			layoutResolver := func(res *mates.Resource) error {
+			layoutResolver := func(res *Resource) error {
 				return pt.resolveStaticResource(res, pt)
 			}
-			var layoutRes []*mates.Resource
-			layoutStr, layoutRes, err = mates.ParseHTMLResources(layoutStr, layoutResolver)
+			var layoutRes []*Resource
+			layoutStr, layoutRes, err = ParseHTMLResources(layoutStr, layoutResolver)
 			if err != nil {
 				return err
 			}
@@ -510,7 +508,7 @@ func (b *Builder) parseFile(path string, kind pageTypeKind, folderContext *Folde
 	}
 
 	// Create the page
-	page := &mates.Page{Grammar: g, Document: doc, Fname: path, Resources: res, Params: frontmatter, PageTypeName: pt.name}
+	page := &Page{Grammar: g, Document: doc, Fname: path, Resources: res, Params: frontmatter, PageTypeName: pt.name}
 	if pt.isNone() {
 		// Do not generate a file for this page
 		page.Fname = ""
@@ -521,7 +519,7 @@ func (b *Builder) parseFile(path string, kind pageTypeKind, folderContext *Folde
 	}
 
 	// Create the generator for the page
-	gen := mates.NewHTMLGenerator(page, base, layouts, contentResolver, folderContext, b.site.ctx, &b.options.Options)
+	gen := NewHTMLGenerator(page, base, layouts, contentResolver, folderContext, b.site.ctx, &b.options.Options)
 	b.generators[path] = gen
 
 	// Parse all templates and determine resources
@@ -559,7 +557,7 @@ func (b *Builder) parseFile(path string, kind pageTypeKind, folderContext *Folde
 
 func (b *Builder) generate() error {
 	// Collect a list of all pages of the site for the .Site.Pages property.
-	// b.ctx.Pages = make([]*mates.PageContext, 0, len(b.generators))
+	// b.ctx.Pages = make([]*PageContext, 0, len(b.generators))
 	b.site.ctx.Pages = make([]interface{}, 0, len(b.generators))
 	for _, gen := range b.generators {
 		if gen.Page().Fname != "" {

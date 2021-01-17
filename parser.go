@@ -1138,36 +1138,6 @@ func removeBOM(data []byte) []byte {
 	return data
 }
 
-func yamlToMap(y yaml.Map) map[string]interface{} {
-	result := make(map[string]interface{})
-	for k, yv := range y {
-		switch v := yv.(type) {
-		case yaml.Map:
-			result[k] = yamlToMap(v)
-		case yaml.List:
-			result[k] = yamlToList(v)
-		case yaml.Scalar:
-			result[k] = string(v)
-		}
-	}
-	return result
-}
-
-func yamlToList(y yaml.List) []interface{} {
-	result := make([]interface{}, 0, len(y))
-	for _, e := range y {
-		switch v := e.(type) {
-		case yaml.Map:
-			result = append(result, yamlToMap(v))
-		case yaml.List:
-			result = append(result, yamlToList(v))
-		case yaml.Scalar:
-			result = append(result, string(v))
-		}
-	}
-	return result
-}
-
 var srcRegex *regexp.Regexp
 
 // ParseHTMLResources searches for occureneces of e.g. src="url".
