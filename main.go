@@ -51,10 +51,13 @@ func main() {
 	}
 
 	// Append the environment variabale MATESPATH to the search path
-	if options.searchPath == "" {
-		options.searchPath = os.Getenv("MATESPATH")
-	} else {
-		options.searchPath += string(filepath.ListSeparator) + os.Getenv("MATESPATH")
+	env := os.Getenv("MATESPATH")
+	if env != "" {
+		if options.searchPath == "" {
+			options.searchPath = env
+		} else {
+			options.searchPath += string(filepath.ListSeparator) + env
+		}
 	}
 
 	// Build all targets

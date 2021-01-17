@@ -46,6 +46,8 @@ func newBuilder(options *options) (*Builder, error) {
 	// Input and output files are located here.
 	b.fs = afero.NewOsFs()
 
+	b.searchPaths = strings.Split(options.searchPath, string(filepath.ListSeparator))
+
 	// The "none" page type always exists.
 	b.pageTypes["none"] = newNonePageType()
 
@@ -842,6 +844,7 @@ func (b *Builder) lookupBundle(bundleName string) error {
 	if !ok {
 		for _, searchPath := range b.searchPaths {
 			bundlePath = filepath.Join(searchPath, p)
+			println("Looking in", bundlePath)
 			s, err := b.fs.Stat(bundlePath)
 			if err == nil && s.IsDir() {
 				ok = true
