@@ -169,6 +169,22 @@ func (scanner *Scanner) isStartOfLine() bool {
 	return true
 }
 
+func (scanner *Scanner) isEnum() bool {
+	if scanner.ch < '0' || scanner.ch > '9' {
+		return false
+	}
+	// Peak at the next characters
+	for i := scanner.readOffset; i < len(scanner.src); i++ {
+		if scanner.src[i] == '.' {
+			return true
+		}
+		if scanner.src[i] < '0' || scanner.src[i] > '9' {
+			return false
+		}
+	}
+	return false
+}
+
 func (scanner *Scanner) skipUntilEmptyLine() {
 	for ; scanner.ch != -1; scanner.next() {
 		if scanner.ch == '\n' {
@@ -289,7 +305,7 @@ scanAgain:
 			}
 			return TokenSection, name
 		}
-	case '-', '+':
+	case '-':
 		if scanner.lineOffset == scanner.offset || scanner.mode == modeNewTag {
 			indent := scanner.offset - scanner.lineOffset
 			start := scanner.offset
@@ -307,7 +323,7 @@ scanAgain:
 				scanner.mode = scanner.nextMode
 				return TokenConfigText, string(scanner.src[start:end])
 			} */
-			// Skip the '-' or '+' character
+			// Skip the '-' character
 			scanner.next()
 			str := string(scanner.src[start:scanner.offset])
 			// A space indicates that normal text follows. Otherwise CSS markup follows
@@ -457,6 +473,40 @@ scanAgain:
 			}
 			return TokenMathText, str
 		}
+	case '1', '2', '3', '4', '5', '6', '7', '8', '9':
+		if scanner.lineOffset == scanner.offset || scanner.mode == modeNewTag {
+			// Peak at the next characters
+			isEnum := true
+			for i := scanner.readOffset; i < len(scanner.src); i++ {
+				if scanner.src[i] == '.' {
+					break
+				}
+				if scanner.src[i] < '0' || scanner.src[i] > '9' {
+					isEnum = false
+					break
+				}
+			}
+			if isEnum {
+				indent := scanner.offset - scanner.lineOffset
+				start := scanner.offset
+				// Skip the number
+				for scanner.next(); scanner.ch >= '0' && scanner.ch <= '9'; scanner.next() {
+				}
+				// Skip '.'
+				scanner.next()
+				str := string(scanner.src[start:scanner.offset])
+				// A space indicates that normal text follows. Otherwise CSS markup follows
+				if scanner.ch == ' ' || scanner.ch == '\t' || scanner.ch == '\r' || scanner.ch == '\n' {
+					scanner.mode = modeNormal
+				} else {
+					scanner.mode = modeSection
+					scanner.nextMode = modeNormal
+				}
+				scanner.textMode = textNormal
+				scanner.indent = indent
+				return TokenEnum, str
+			}
+		}
 	}
 	start := scanner.offset
 	switch scanner.mode {
@@ -494,7 +544,7 @@ scanAgain:
 			if scanner.ch == '\n' {
 				scanner.skipWhitespace(true)
 				// If a '#' or '-' or '+' or '>' follows the empty line then ignore the white space that has been skipped
-				if scanner.ch == '#' || scanner.ch == '-' || scanner.ch == '+' || scanner.ch == '>' || scanner.ch == '%' {
+				if scanner.ch == '#' || scanner.ch == '-' || scanner.ch == '>' || scanner.ch == '%' || scanner.isEnum() {
 					scanner.mode = modeNewTag
 					goto scanAgain
 				}
@@ -507,7 +557,7 @@ scanAgain:
 		var result string
 		colon := false
 		for scanner.ch != -1 && scanner.ch != '{' && scanner.ch != '}' && scanner.ch != '~' && scanner.ch != '`' && scanner.ch != '$' && scanner.ch != '_' && scanner.ch != '*' &&
-			(!newline || (scanner.ch != '#' && scanner.ch != '+' && scanner.ch != '-' && scanner.ch != '%' && scanner.ch != '>')) &&
+			(!newline || (scanner.ch != '#' && scanner.ch != '|' && scanner.ch != '-' && scanner.ch != '%' && scanner.ch != '>' && !scanner.isEnum())) &&
 			(scanner.textMode != textTable || scanner.ch != '|') &&
 			(scanner.textMode != textParagraph || scanner.ch != '\n' || !colon) {
 			// Break upon an empty line
@@ -539,7 +589,7 @@ scanAgain:
 		result += string(scanner.src[start:scanner.offset])
 		// The next markup starts a new line or at least a line that contained spaces so far?
 		// Then force the scanner to recognize a new tag when going futher.
-		if newline && (scanner.ch == '#' || scanner.ch == '+' || scanner.ch == '-' || scanner.ch == '%' || scanner.ch == '>') {
+		if newline && (scanner.ch == '#' || scanner.ch == '|' || scanner.ch == '-' || scanner.ch == '%' || scanner.ch == '>' || scanner.isEnum()) {
 			scanner.mode = modeNewTag
 		} else if colon && scanner.textMode == textParagraph && scanner.ch == '\n' {
 			scanner.skipWhitespace(true)
