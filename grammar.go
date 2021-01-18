@@ -13,10 +13,10 @@ const (
 	// tag types which explicitly claim the tags of this type as parent.
 	NoParentHood ParentHood = 0
 	// RootParentHood means that all tags of this type that have a DefaultParent of nil
-	// can be a child if this tag.
+	// can be a child of this tag.
 	RootParentHood ParentHood = 1
 	// DefaultRootParentHood is the same as RootParentHood.
-	// In addition, this tag will become the DefaultParent to all those possible chold tags.
+	// In addition, this tag will become the DefaultParent to all those possible child tags.
 	DefaultRootParentHood ParentHood = 2
 	// IndentParentHood is similar to RootParentHood. The difference is that
 	// all child tags must be indented.

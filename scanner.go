@@ -543,7 +543,7 @@ scanAgain:
 			newline = true
 			if scanner.ch == '\n' {
 				scanner.skipWhitespace(true)
-				// If a '#' or '-' or '+' or '>' follows the empty line then ignore the white space that has been skipped
+				// If a '#' or '-' or '>' follows the empty line then ignore the white space that has been skipped
 				if scanner.ch == '#' || scanner.ch == '-' || scanner.ch == '>' || scanner.ch == '%' || scanner.isEnum() {
 					scanner.mode = modeNewTag
 					goto scanAgain
@@ -592,8 +592,10 @@ scanAgain:
 		if newline && (scanner.ch == '#' || scanner.ch == '|' || scanner.ch == '-' || scanner.ch == '%' || scanner.ch == '>' || scanner.isEnum()) {
 			scanner.mode = modeNewTag
 		} else if colon && scanner.textMode == textParagraph && scanner.ch == '\n' {
+			// A text line ending with ':' is a shortcut syntax for the #dt and #dd tag.
+			// The following text becomes a child of the #dd tag.
 			scanner.skipWhitespace(true)
-			scanner.mode = modeNewTag
+			scanner.mode = modeNormal
 			scanner.textMode = textNormal
 			result = strings.TrimRight(result, " \r\t\n")
 		}

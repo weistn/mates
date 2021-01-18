@@ -951,7 +951,6 @@ func (parser *Parser) parse() (doc *DocumentNode, err error) {
 						openTag2(dlNode.TagDefinition, dlNode, true)
 						closeTags(len(tagStack) - 1)
 						ddNode := parser.newDocumentNode("#dd", parag.Indent)
-						ddNode.Text = parag.Text
 						openTag2(ddNode.TagDefinition, ddNode, true)
 						// t := parser.grammar.GetTag("#def")
 						// tagStack[len(tagStack)-1] = t
