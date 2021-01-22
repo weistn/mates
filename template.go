@@ -45,12 +45,12 @@ func (ctx *PageContext) Params() map[string]interface{} {
 	return ctx.page.Params
 }
 
-// Site returns an object that holds information about the site.
+// Site returns an object that holds information about the site to which the page belongs.
 func (ctx *PageContext) Site() interface{} {
 	return ctx.siteContext
 }
 
-// Folder returns an object that holds information about the folder.
+// Folder returns an object that holds information about the folder to which the page belongs.
 func (ctx *PageContext) Folder() interface{} {
 	return ctx.folderContext
 }

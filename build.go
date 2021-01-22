@@ -432,7 +432,6 @@ func (b *Builder) parseFile(path string, kind pageTypeKind, folderContext *Folde
 		syntaxResolver := func(res *Resource) error {
 			return pt.resolveStaticResource(res, pt)
 		}
-		// println("SYNTAX: ", markdownSyntaxFile)
 		syntaxParser := NewParser(g, markdownSyntax, syntaxResolver)
 		// Parse the frontmatter of the syntax extension. But currently it is ignored
 		_, err = syntaxParser.ParseFrontmatter()

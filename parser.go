@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"html"
@@ -50,43 +49,13 @@ func NewParser(grammar *Grammar, markdown []byte, resolver ResourceResolver) *Pa
 // ParseFrontmatter strips YAML frontmatter from the markdown data and parses it.
 func (parser *Parser) ParseFrontmatter() (map[string]interface{}, error) {
 	// No YAML?
-	if !parser.s.skipString(yamlSeparator) {
+	if !parser.s.HasFrontMatter() {
 		return nil, nil
 	}
-	// Skip all remaining dashes
-	for ; parser.s.ch == '-'; parser.s.next() {
-	}
-	parser.s.skipWhitespace(false)
-	start := parser.s.offset
-	// Skip along until the separator is found
-	for parser.s.ch != -1 {
-		if parser.s.skipString(yamlSeparator) {
-			break
-		}
-		parser.s.next()
-	}
-	var end int
-	if parser.s.ch == -1 {
-		end = parser.s.offset
-	} else {
-		end = parser.s.offset - 4
-	}
-	// Skip all remaining dashes
-	for ; parser.s.ch == '-'; parser.s.next() {
-	}
-	parser.s.skipWhitespace(true)
-	reader := bytes.NewReader(parser.s.src[start:end])
-	fmNode, err := yaml.Parse(reader)
-	if err != nil {
-		return nil, err
-	}
-	if fmNode != nil {
-		if fmMap, ok := fmNode.(yaml.Map); ok {
-			return yamlToMap(fmMap), nil
-		}
-		return nil, fmt.Errorf("Expected a YAML map")
-	}
-	return nil, nil
+	parser.s.mode = modeConfig
+	parser.s.nextMode = modeNewTag
+	parser.next()
+	return parser.parseConfig()
 }
 
 // ParseMarkdown parses the passed data and returns a document tree.
@@ -117,8 +86,28 @@ func (parser *Parser) newDocumentNode(tag string, indent int) *DocumentNode {
 	return &DocumentNode{Tag: tag, TagDefinition: tagdef, Document: parser.rootNode, Indent: indent}
 }
 
+func (parser *Parser) parseConfig() (map[string]interface{}, error) {
+	if parser.token == TokenConfigText {
+		reader := strings.NewReader(parser.tokenStr)
+		parser.next()
+		configNode, err := yaml.Parse(reader)
+		if err != nil {
+			return nil, err
+		}
+		if configNode != nil {
+			if configMap, ok := configNode.(yaml.Map); ok {
+				return yamlToMap(configMap), nil
+			}
+			return nil, errors.New("Expected a YAML map")
+		}
+	}
+	return nil, nil
+}
+
 func (parser *Parser) parse() (doc *DocumentNode, err error) {
-	parser.next()
+	if parser.token == 0 {
+		parser.next()
+	}
 
 	tagStack := []*TagDefinition{}
 	nodeStack := []*DocumentNode{parser.rootNode}
@@ -148,24 +137,6 @@ func (parser *Parser) parse() (doc *DocumentNode, err error) {
 			}
 		}
 		return
-	}
-
-	parseConfig := func() (map[string]interface{}, error) {
-		if parser.token == TokenConfigText {
-			reader := strings.NewReader(parser.tokenStr)
-			parser.next()
-			configNode, err := yaml.Parse(reader)
-			if err != nil {
-				return nil, err
-			}
-			if configNode != nil {
-				if configMap, ok := configNode.(yaml.Map); ok {
-					return yamlToMap(configMap), nil
-				}
-				return nil, errors.New("Expected a YAML map")
-			}
-		}
-		return nil, nil
 	}
 
 	copyCounter := func(c *DocumentNode) {
@@ -491,12 +462,12 @@ func (parser *Parser) parse() (doc *DocumentNode, err error) {
 				var resources []*Resource
 				var firstChild bool
 				parentHood := NoParentHood
-				// Do not parse CSS styles. Instead expect YAML config text
+				// Expect YAML config text
 				parser.s.mode = modeConfig
 				parser.s.textMode = textCode
 				parser.s.skipWhitespace(false)
 				parser.next()
-				config, err := parseConfig()
+				config, err := parser.parseConfig()
 				if err != nil {
 					return nil, err
 				}
@@ -658,7 +629,7 @@ func (parser *Parser) parse() (doc *DocumentNode, err error) {
 				parser.s.textMode = textCode
 				parser.s.skipWhitespace(false)
 				parser.next()
-				config, err := parseConfig()
+				config, err := parser.parseConfig()
 				if err != nil {
 					return nil, err
 				}
@@ -741,7 +712,7 @@ func (parser *Parser) parse() (doc *DocumentNode, err error) {
 				parser.s.textMode = textCode
 				parser.s.skipWhitespace(false)
 				parser.next()
-				config, err := parseConfig()
+				config, err := parser.parseConfig()
 				if err != nil {
 					return nil, err
 				}

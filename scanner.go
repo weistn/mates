@@ -10,7 +10,7 @@ type Token int
 
 const (
 	// TokenEOF denotes the end of file.
-	TokenEOF Token = iota
+	TokenEOF Token = 1 + iota
 	// TokenText denotes plain text
 	TokenText
 	// TokenSection denotes a tag
@@ -65,9 +65,6 @@ const (
 	textMath
 	textParagraph
 )
-
-// String denoting start and end of the frontmatter.
-var yamlSeparator = []byte("---")
 
 // ScannerError reports a lexicographic error,
 // which is either an illegal character or a malformed UTF-8 encoding.
@@ -179,6 +176,20 @@ func (scanner *Scanner) isEnum() bool {
 			return true
 		}
 		if scanner.src[i] < '0' || scanner.src[i] > '9' {
+			return false
+		}
+	}
+	return false
+}
+
+// HasFrontMatter returns true if the source starts with YAML frontmatter
+func (scanner *Scanner) HasFrontMatter() bool {
+	// Peak at the next characters
+	for i := scanner.readOffset; i < len(scanner.src); i++ {
+		if scanner.src[i] == ':' && i > 0 {
+			return true
+		}
+		if (scanner.src[i] < 'a' || scanner.src[i] > 'z') && (scanner.src[i] < 'A' || scanner.src[i] > 'Z') && (scanner.src[i] < '0' || scanner.src[i] > '9') && scanner.src[i] != '_' {
 			return false
 		}
 	}
