@@ -829,9 +829,9 @@ func (b *Builder) lookupBundle(bundleName string) error {
 	var ok bool
 	var bundlePath string
 	var fs afero.Fs
-	p := filepath.Join("bundles", bundleName)
+	p := filepath.Join("bundles", filepath.FromSlash(bundleName))
 
-	// Search in the site for a dir named `p`
+	// Search in the site for a dir named `bundles/<bundlename>`
 	bundlePath = p
 	s, err := b.site.siteFs.Stat(bundlePath)
 	if err == nil && s.IsDir() {
@@ -839,8 +839,9 @@ func (b *Builder) lookupBundle(bundleName string) error {
 		fs = afero.NewBasePathFs(b.site.siteFs, bundlePath)
 	}
 
-	// Search in all search paths for a dir named `p`
+	// Search in all search paths for a dir named `<bundlename>`
 	if !ok {
+		p = filepath.FromSlash(bundleName)
 		for _, searchPath := range b.searchPaths {
 			bundlePath = filepath.Join(searchPath, p)
 			println("Looking in", bundlePath)
