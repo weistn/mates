@@ -300,11 +300,11 @@ func (b *Builder) parse() error {
 func (b *Builder) parseFile(path string, kind pageTypeKind, folderContext *FolderContext) error {
 	g := NewGrammar()
 	var markdown []byte
-	var pt *pageType
 	var res []*Resource
 	var parser *Parser
 	var doc *DocumentNode
 	var err error
+	var pt *pageType
 	var frontmatter map[string]interface{}
 	tags := make(map[string][]string)
 
@@ -393,24 +393,10 @@ func (b *Builder) parseFile(path string, kind pageTypeKind, folderContext *Folde
 			}
 			pt, err = b.lookupPageType(pageTypeName)
 			if err != nil {
-				return fmt.Errorf("In %v Type: %v", path, err.Error())
+				return fmt.Errorf("In %v: page type %v: %v", path, pageTypeName, err.Error())
 			}
 		default:
-			if list, ok := v.([]interface{}); ok {
-				for _, tagValue := range list {
-					if tagValueName, ok := tagValue.(string); ok {
-						tags[k] = append(tags[k], tagValueName)
-					} else {
-						return fmt.Errorf("Value of category must be a string or a list of strings")
-					}
-				}
-			} else {
-				vstr, err := yamlString(k, v, path)
-				if err != nil {
-					return fmt.Errorf("Value of category must be a string or a list of strings")
-				}
-				tags[k] = []string{vstr}
-			}
+			// Handle later, after the page type is known
 		}
 	}
 
@@ -418,8 +404,45 @@ func (b *Builder) parseFile(path string, kind pageTypeKind, folderContext *Folde
 	if pt == nil {
 		pt = b.selectPageType(kind, folderContext)
 	}
-
 	println("    page Type: ", pt.name)
+
+	for k, v := range frontmatter {
+		switch k {
+		case "Scripts", "Styles", "Type", "Title":
+			// Handled above
+			break
+		default:
+			// Is `k` a TagType?
+			if _, ok := b.site.tags.Types[k]; ok {
+				if list, ok := v.([]interface{}); ok {
+					for _, tagValue := range list {
+						if tagValueName, ok := tagValue.(string); ok {
+							tags[k] = append(tags[k], tagValueName)
+						} else {
+							return fmt.Errorf("In %v: Value of tag type %v must be a string or a list of strings", path, k)
+						}
+					}
+				} else {
+					vstr, err := yamlString(k, v, path)
+					if err != nil {
+						return fmt.Errorf("In %v: Value of tag type %v must be a string or a list of strings", path, k)
+					}
+					tags[k] = []string{vstr}
+				}
+			} else {
+				// `k` must be a VarDef
+				vdef, err := pt.findVariable(k)
+				if err != nil {
+					return fmt.Errorf("In %v: %v is neither a tag type nor a known variable", path, k)
+				}
+				err = vdef.checkYAMLValue(v)
+				if err != nil {
+					return fmt.Errorf("In %v: variable %v: %v", path, k, err)
+				}
+			}
+		}
+	}
+
 	// Lookup syntax extension (if available)
 	markdownSyntaxData, _, err := b.lookupMarkdownSyntax(pt)
 	if err != nil && !os.IsNotExist(err) {

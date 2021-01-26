@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"path/filepath"
 
 	"github.com/spf13/afero"
 )
@@ -22,7 +23,8 @@ type bundle struct {
 	categoryValuePageType *pageType
 	// This data structure is only used to scan bundle.yaml and it is not fully populated.
 	// Use the `Tags` structure attached to `site` instead.
-	tags *Tags
+	tags    *Tags
+	varDefs map[string]*VarDef
 }
 
 func newBundle(name string, path string, fs afero.Fs, b *Builder) *bundle {
@@ -87,6 +89,11 @@ func (bndl *bundle) load() error {
 			}
 		case "Tags":
 			err = bndl.tags.addFromYaml(v, "bundle.yaml")
+			if err != nil {
+				return err
+			}
+		case "Vars":
+			bndl.varDefs, err = yamlToVarDefs(v, filepath.Join(bndl.path, "bundle.yaml"))
 			if err != nil {
 				return err
 			}

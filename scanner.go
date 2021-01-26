@@ -189,7 +189,7 @@ func (scanner *Scanner) HasFrontMatter() bool {
 		if scanner.src[i] == ':' && i > 0 {
 			return true
 		}
-		if (scanner.src[i] < 'a' || scanner.src[i] > 'z') && (scanner.src[i] < 'A' || scanner.src[i] > 'Z') && (scanner.src[i] < '0' || scanner.src[i] > '9') && scanner.src[i] != '_' {
+		if (scanner.src[i] < 'a' || scanner.src[i] > 'z') && (scanner.src[i] < 'A' || scanner.src[i] > 'Z') && (scanner.src[i] < '0' || scanner.src[i] > '9') && scanner.src[i] != '_' && scanner.src[i] != '-' && scanner.src[i] != '/' {
 			return false
 		}
 	}

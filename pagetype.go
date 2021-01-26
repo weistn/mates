@@ -36,6 +36,7 @@ type pageType struct {
 	inheritPageType *pageType
 	// A list of resources required by the page, such as CSS, JS, images etc.
 	resources []*Resource
+	varDefs   map[string]*VarDef
 }
 
 // Default HTML tempalte to use for a page in case nothing else has been specified.
@@ -135,6 +136,11 @@ func newPageType(fs afero.Fs, path string, name string, bundle *bundle, b *Build
 					return nil, err
 				}
 				p.resources = append(p.resources, r)
+			}
+		case "Vars":
+			p.varDefs, err = yamlToVarDefs(v, filepath.Join(p.path, configFilePath))
+			if err != nil {
+				return nil, err
 			}
 		default:
 			log.Printf("Unknown attribute %v in page %v", k, configFilePath)
@@ -263,4 +269,16 @@ func (p *pageType) resolveStaticResource(res *Resource, onBehalfOf *pageType) er
 		return p.inheritPageType.resolveStaticResource(res, onBehalfOf)
 	}
 	return fmt.Errorf("Missing resource file %v in page type %v", res.URL.String(), onBehalfOf.name)
+}
+
+func (p *pageType) findVariable(name string) (*VarDef, error) {
+	if p.varDefs != nil {
+		if v, ok := p.varDefs[name]; ok {
+			return v, nil
+		}
+	}
+	if p.inheritPageType != nil {
+		return p.inheritPageType.findVariable(name)
+	}
+	return nil, fmt.Errorf("Unknown variable %v", name)
 }
